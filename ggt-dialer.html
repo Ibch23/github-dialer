@@ -165,6 +165,17 @@
     }
   }
 
+  function onCallConnected(c) {
+    callSid = (c && c.parameters && c.parameters.CallSid) ? c.parameters.CallSid : (c && c.callSid ? c.callSid : '');
+    setStatus('connected', 'Connected');
+    document.getElementById('btnCall').style.display = 'none';
+    document.getElementById('btnTransfer').style.display = 'flex';
+    document.getElementById('btnHangup').style.display = 'block';
+    document.getElementById('muteRow').style.display = 'flex';
+    document.getElementById('timer').style.display = 'block';
+    startTimer();
+  }
+
   function makeCall() {
     let phone = document.getElementById('phoneInput').value.trim();
     if (!phone) { alert('Please enter a phone number.'); return; }
@@ -174,16 +185,8 @@
 
     call = device.connect({ params: { To: phone, CallerId: CALLER_ID } });
     call.on('ringing', () => setStatus('calling', 'Ringing...'));
-    call.on('accept', (c) => {
-      callSid = c.parameters.CallSid;
-      setStatus('connected', 'Connected');
-      document.getElementById('btnCall').style.display = 'none';
-      document.getElementById('btnTransfer').style.display = 'flex';
-      document.getElementById('btnHangup').style.display = 'block';
-      document.getElementById('muteRow').style.display = 'flex';
-      document.getElementById('timer').style.display = 'block';
-      startTimer();
-    });
+    call.on('accept', (c) => onCallConnected(c));
+    call.on('connect', (c) => onCallConnected(c));
     call.on('disconnect', () => onDisconnect());
     call.on('error', () => setStatus('error', 'Call error'));
     setStatus('calling', 'Calling...');
