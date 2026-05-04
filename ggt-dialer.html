@@ -103,7 +103,6 @@
       font-size: 13px; color: #1a6fc4; text-align: center;
     }
     .footer { text-align: center; margin-top: 24px; font-size: 12px; color: #aaa; }
-    .loading-overlay { text-align: center; padding: 20px 0; color: #888; font-size: 14px; }
   </style>
 </head>
 <body>
@@ -116,38 +115,35 @@
     <div class="dot"></div>
     <span>Calling from: +1 (833) 389-0237</span>
   </div>
-  <div id="loading" class="loading-overlay">Connecting to dialer...</div>
-  <div id="dialer" style="display:none;">
-    <div class="field">
-      <label>Lead Phone Number</label>
-      <input type="tel" id="phoneInput" placeholder="+1 (555) 000-0000" />
-    </div>
-    <div class="field">
-      <label>Lead Name (optional)</label>
-      <input type="text" id="nameInput" placeholder="John Smith" />
-    </div>
-    <button class="btn-call" id="btnCall" onclick="makeCall()">
-      <svg width="16" height="16" fill="none" viewBox="0 0 24 24"><path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z" fill="white"/></svg>
-      Call Lead
-    </button>
-    <button class="btn-answered" id="btnAnswered" onclick="onCallConnected()">
-      ✓ Lead Answered — Show Controls
-    </button>
-    <button class="btn-transfer" id="btnTransfer" onclick="transferCall()">
-      ➜ Transfer to Senior Rep
-    </button>
-    <button class="btn-hangup" id="btnHangup" onclick="hangUp()">End Call</button>
-    <div class="mute-row" id="muteRow">
-      <button class="btn-mute" id="btnMute" onclick="toggleMute()">Mute</button>
-    </div>
-    <div class="transfer-note" id="transferNote">
-      Lead transferred to senior rep. You can hang up now.
-    </div>
-    <div class="status-box">
-      <div class="status-indicator ready" id="statusDot"></div>
-      <span class="status-text" id="statusText">Ready</span>
-      <span class="timer" id="timer">0:00</span>
-    </div>
+  <div class="field">
+    <label>Lead Phone Number</label>
+    <input type="tel" id="phoneInput" placeholder="+1 (555) 000-0000" />
+  </div>
+  <div class="field">
+    <label>Lead Name (optional)</label>
+    <input type="text" id="nameInput" placeholder="John Smith" />
+  </div>
+  <button class="btn-call" id="btnCall" onclick="makeCall()">
+    <svg width="16" height="16" fill="none" viewBox="0 0 24 24"><path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z" fill="white"/></svg>
+    Call Lead
+  </button>
+  <button class="btn-answered" id="btnAnswered" onclick="onCallConnected()">
+    ✓ Lead Answered — Show Controls
+  </button>
+  <button class="btn-transfer" id="btnTransfer" onclick="transferCall()">
+    ➜ Transfer to Senior Rep
+  </button>
+  <button class="btn-hangup" id="btnHangup" onclick="hangUp()">End Call</button>
+  <div class="mute-row" id="muteRow">
+    <button class="btn-mute" id="btnMute" onclick="toggleMute()">Mute</button>
+  </div>
+  <div class="transfer-note" id="transferNote">
+    Lead transferred to senior rep. You can hang up now.
+  </div>
+  <div class="status-box">
+    <div class="status-indicator ready" id="statusDot"></div>
+    <span class="status-text" id="statusText">Ready</span>
+    <span class="timer" id="timer">0:00</span>
   </div>
   <div class="footer">Powered by Twilio &bull; Global Gate Tax Relief</div>
 </div>
@@ -158,7 +154,7 @@
   const CALLER_ID = '+18333890237';
   const TRANSFER_TO = '+19493873298';
 
-  let device, call, callSid, muted = false, timerInterval, seconds = 0;
+  let device, call, callSid, muted = false, timerInterval, seconds = 0, deviceReady = false;
 
   function onCallConnected() {
     callSid = call && call.parameters ? call.parameters.CallSid : '';
@@ -172,31 +168,39 @@
   }
 
   async function initDevice() {
+    if (deviceReady) return true;
     try {
+      setStatus('calling', 'Connecting...');
       const res = await fetch(TOKEN_URL);
       const data = await res.json();
       device = new Twilio.Device(data.token, { codecPreferences: ['opus', 'pcmu'] });
-      device.on('ready', () => setStatus('ready', 'Ready'));
+      await device.register();
       device.on('error', (err) => setStatus('error', 'Error: ' + err.message));
       device.on('disconnect', () => onDisconnect());
-      document.getElementById('loading').style.display = 'none';
-      document.getElementById('dialer').style.display = 'block';
+      deviceReady = true;
+      return true;
     } catch (e) {
-      document.getElementById('loading').textContent = 'Failed to connect. Please refresh.';
+      setStatus('error', 'Failed to connect. Please refresh.');
+      return false;
     }
   }
 
-  function makeCall() {
+  async function makeCall() {
     let phone = document.getElementById('phoneInput').value.trim();
     if (!phone) { alert('Please enter a phone number.'); return; }
     phone = phone.replace(/\D/g, '');
     if (phone.length === 10) phone = '1' + phone;
     phone = '+' + phone;
 
-    call = device.connect({ params: { To: phone, CallerId: CALLER_ID } });
+    document.getElementById('btnCall').disabled = true;
+    const ready = await initDevice();
+    if (!ready) { document.getElementById('btnCall').disabled = false; return; }
+
+    call = await device.connect({ params: { To: phone, CallerId: CALLER_ID } });
     call.on('ringing', () => setStatus('calling', 'Ringing...'));
     call.on('disconnect', () => onDisconnect());
     call.on('error', () => setStatus('error', 'Call error'));
+
     setStatus('calling', 'Calling...');
     document.getElementById('btnCall').style.display = 'none';
     document.getElementById('btnAnswered').style.display = 'flex';
@@ -269,8 +273,6 @@
   }
 
   function stopTimer() { clearInterval(timerInterval); }
-
-  initDevice();
 </script>
 </body>
 </html>
