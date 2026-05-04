@@ -150,23 +150,11 @@
 
   let device, call, callSid, muted = false, timerInterval, seconds = 0;
 
-  async function initDevice() {
-    try {
-      const res = await fetch(TOKEN_URL);
-      const data = await res.json();
-      device = new Twilio.Device(data.token, { codecPreferences: ['opus', 'pcmu'] });
-      device.on('ready', () => setStatus('ready', 'Ready'));
-      device.on('error', (err) => setStatus('error', 'Error: ' + err.message));
-      device.on('disconnect', () => onDisconnect());
-      document.getElementById('loading').style.display = 'none';
-      document.getElementById('dialer').style.display = 'block';
-    } catch (e) {
-      document.getElementById('loading').textContent = 'Failed to connect. Please refresh.';
-    }
-  }
-
   function onCallConnected(c) {
-    callSid = (c && c.parameters && c.parameters.CallSid) ? c.parameters.CallSid : (c && c.callSid ? c.callSid : '');
+    if (document.getElementById('btnHangup').style.display === 'block') return;
+    callSid = (c && c.parameters && c.parameters.CallSid) 
+      ? c.parameters.CallSid 
+      : (c && c.callSid ? c.callSid : '');
     setStatus('connected', 'Connected');
     document.getElementById('btnCall').style.display = 'none';
     document.getElementById('btnTransfer').style.display = 'flex';
@@ -174,6 +162,22 @@
     document.getElementById('muteRow').style.display = 'flex';
     document.getElementById('timer').style.display = 'block';
     startTimer();
+  }
+
+  async function initDevice() {
+    try {
+      const res = await fetch(TOKEN_URL);
+      const data = await res.json();
+      device = new Twilio.Device(data.token, { codecPreferences: ['opus', 'pcmu'] });
+      device.on('ready', () => setStatus('ready', 'Ready'));
+      device.on('error', (err) => setStatus('error', 'Error: ' + err.message));
+      device.on('connect', (c) => onCallConnected(c));
+      device.on('disconnect', () => onDisconnect());
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('dialer').style.display = 'block';
+    } catch (e) {
+      document.getElementById('loading').textContent = 'Failed to connect. Please refresh.';
+    }
   }
 
   function makeCall() {
@@ -185,8 +189,6 @@
 
     call = device.connect({ params: { To: phone, CallerId: CALLER_ID } });
     call.on('ringing', () => setStatus('calling', 'Ringing...'));
-    call.on('accept', (c) => onCallConnected(c));
-    call.on('connect', (c) => onCallConnected(c));
     call.on('disconnect', () => onDisconnect());
     call.on('error', () => setStatus('error', 'Call error'));
     setStatus('calling', 'Calling...');
